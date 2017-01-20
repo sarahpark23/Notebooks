@@ -1,0 +1,321 @@
+---
+title: "Exploring the BRFSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+```
+
+### Load data
+
+
+```{r load-data}
+setwd("C:/Users/other/Desktop/Personal/Stats")
+load("brfss2013.RData")
+```
+
+
+
+* * *
+
+## Part 1: Data
+
+The BRFSS is a national survey with data collected annually since 1984. Over 400,000 adults complete the interview each year.
+
+The data is collected by phone using separate samples of cellular and landline numbers. As such, these results can only be generalized to those US households that have either a cellular or landline phone, which the OVERVIEW: BRFSS 2013 document states is about 97.5% of US Households. See link below for the document:
+
+http://www.cdc.gov/brfss/annual_data/2013/pdf/overview_2013.pdf
+
+The phone numbers are selected at random from a list of phone numbers. In many states, these lists are first stratified geographically. In some cases, certain geographies are oversampled to insure readable samples of smaller areas.
+
+People responding to the survey by cell phone are hard-coded as a single-adult household. One adult (age 18+) in the household is selected at random to answer the survey for those respondents being interviewed on a landline phone. The value of contacting cell-only households would seem to outweigh the bias created by treating cell respondents differently than landline respondents.
+
+As this survey is completely observational, we cannot directly show causality from our results. At best, we can use this data set to infer relationships of covariation.
+
+Finally, while this data should be used with a weight, our instruction up to this point has not dealt with weighted data sets. As such, the analysis will be done on unweighted data. This analysis should be viewed with that in mind.
+
+* * *
+
+## Part 2: Research questions
+
+**Research question 1:**
+
+Does the relationship between access to healthcare coverage and general health differ by ethnicity? - We would expect a positive relationship between healthcare coverage and general health overall, but among those with coverage, is general heath rated higher for Non-Hispanic Whites than Non-Hispanic Blacks?
+
+
+**Research question 2:**
+
+At what level of household income does more than 10% of adults say there was a time in the past 12 months when they needed to see a doctor but could not because of cost? While this observational data set cannot decisively conclude that lower income causes people to be unable to afford a doctor visit, we would expect a relationship being lower household income and being unable to see a doctor due to cost.
+
+**Research question 3:**
+
+Among drinkers of alcohol in the past 30 days, does the occurrence of binge drinking differ by age and sex? While this question might bring stereotypical answers to mind, it is important to access the collected data to determine if there are subpopulations that might unexpectedly need binge-drinking outreach.
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+
+**Research question 1:**
+
+Among those with health coverage, is general heath rated higher for Non-Hispanic Whites than Non-Hispanic Blacks?
+
+First, the general health variable (genhlth) must be converted to a numeric variable, with a rating of 5 equal to "Excellent"" and a rating of 1 equal to "Poor." for the purposes of this question, the conversion was only done for our sample of interest, those that have some form of health insurance coverage (hlthpln1).
+
+
+```{r}
+
+#recoding variable to numeric
+brfss2013 <- brfss2013 %>%
+  filter(hlthpln1 == "Yes") %>%
+  mutate(ex_health = 
+           ifelse(genhlth=='Excellent', 5, 
+           ifelse(genhlth=='Very good', 4,
+           ifelse(genhlth=='Good', 3,
+           ifelse(genhlth=='Fair', 2,
+           ifelse(genhlth=='Poor', 1,0                  ))))))
+
+```
+
+Next, we need to compare the health ratings of the two groups. The entire range of ratings is shown below for both the Non-Hispanic White (NHW) and the Non-Hispanic Black (NHB) groups. 
+
+18.5% of NHWs with healthcare coverage rated their health as Excellent. 54% of NHWs rated their health as Excellent or Very Good. In contrast, only 12.8% of NHBs with healthcare coverage rated their health as Excellent and 37.4% as Excellent or Very Good. 
+
+It appears from this preliminary analysis that there is a relationship between race and the rating general health for those covered by insurance.
+
+```{r}
+brfss2013 %>% 
+  filter(hlthpln1 == "Yes",X_race == "White only, non-Hispanic") %>%
+  group_by(genhlth) %>% 
+  summarise(count = n())
+
+brfss2013 %>% 
+  filter(hlthpln1 == "Yes",X_race == "Black only, non-Hispanic") %>%
+  group_by(genhlth) %>% 
+  summarise(count = n())
+
+62930/(62930+121007+99201+39690+17782)  #percent of NHWs in excellent health (among those with health insurance coverage)
+
+4146/(4146+7988+11375+6522+2392)  #percent of NHBs in excellent health (among those with health insurance coverage)
+
+(62930+121007)/(62930+121007+99201+39690+17782)  #percent of NHWs in excellent/very good health (among those with health insurance coverage)
+
+(4146+7988)/(4146+7988+11375+6522+2392)  #percent of NHBs in excellent/very good health (among those with health insurance coverage)
+```
+
+The average rating (1=Poor and 5=Excellent) for NHWs at 3.50 is also higher than NHBs at 3.15. While these were not statistically tested, the sample sizes on these two groups is quite large, and for the purposes of this exploratory analysis, the two groups appear to differ on ratings. 
+
+```{r}
+brfss2013 %>% 
+  filter(hlthpln1 == "Yes",X_race == "White only, non-Hispanic", ex_health!= 'NA') %>%
+  summarise(mean(ex_health))
+
+brfss2013 %>% 
+  filter(hlthpln1 == "Yes",X_race == "Black only, non-Hispanic", ex_health!= 'NA') %>%
+  summarise(mean(ex_health))
+```
+
+These two histograms of general health ratings provide further evidence that race has a relationship with the rating of general health. Recall that 1=Poor and 5=Excellent. The first, for NHWs, shows left-skewed results with more respondents rating their health better. The peak is a rating of 4 (Very Good).
+
+The second histogram has the results for NHBs, and the results are more symmetrical than the graph above. The peak for NHBs is right in the middle at 3 (Good).
+
+```{r}
+
+ggplot(data=brfss2013, aes(ex_health)) + geom_histogram(aes(ex_health), binwidth = .5, subset(brfss2013,X_race == "White only, non-Hispanic"))
+
+ggplot(data=brfss2013, aes(ex_health)) + geom_histogram(aes(ex_health), binwidth = .5, subset(brfss2013,X_race == "Black only, non-Hispanic"))
+
+
+```
+
+While the ratings in general health seem to vary by ethnicity, the underlying cause(s) are not apparent and would require further research. 
+
+
+
+
+**Research question 2:**
+
+At what level of household income does more than 10% of adults say there was a time in the past 12 months when they needed to see a doctor but could not because of cost?
+
+The BRFSS collected data on whether or not the respondent had a time in the past 12 months when they needed to see a doctor but couldn't afford to go. This variable was recoded into numerical values for analysis purposes. The labels for income (income2) were also shortened to fit the graph. 
+
+```{r}
+load("brfss2013.RData")
+
+#recoding variable to numeric
+brfss2013 <- brfss2013 %>%
+  filter(!is.na(medcost)) %>% 
+  mutate(medcost_r = 
+           ifelse(medcost=='Yes', 1, 
+           ifelse(medcost=='No', 0,0                  )))
+
+#shortening labels for graph
+brfss2013 <- brfss2013 %>%
+  filter(!is.na(income2)) %>% 
+  mutate(income2_r = 
+           ifelse(income2=='Less than $10,000', 'LT 10K',
+           ifelse(income2=='Less than $15,000', 'LT 15K',
+           ifelse(income2=='Less than $20,000', 'LT 20K',
+           ifelse(income2=='Less than $25,000', 'LT 25K',
+           ifelse(income2=='Less than $35,000', 'LT 35K',
+           ifelse(income2=='Less than $50,000', 'LT 50K',
+           ifelse(income2=='Less than $75,000', 'LT 75K',
+           ifelse(income2=='$75,000 or more', 'MT 75K','0'                  )))))))))
+
+#recoding for second graph
+brfss2013 <- brfss2013 %>%
+  filter(!is.na(income2)) %>% 
+  mutate(income2_r2 = 
+           ifelse(income2=='Less than $10,000', 'LT 25K',
+           ifelse(income2=='Less than $15,000', 'LT 25K',
+           ifelse(income2=='Less than $20,000', 'LT 25K',
+           ifelse(income2=='Less than $25,000', 'LT 25K',
+           ifelse(income2=='Less than $35,000', 'LT 50K',
+           ifelse(income2=='Less than $50,000', 'LT 50K',
+           ifelse(income2=='Less than $75,000', 'LT 75K',
+           ifelse(income2=='$75,000 or more', 'MT 75K','0'                  )))))))))
+
+
+```
+
+The percent of people not being able to afford a doctor's visit in the last year is 28.7% for the lowest household income bracket of less than $10,000. This declines steadily for each consecutively higher income bracket. Once the household income reaches $35K-$49K, only about 10% say they were unable to pay for a needed doctor's visit in the last year. 
+
+```{r}
+
+brfss2013 %>% 
+  group_by(income2_r) %>% 
+  summarise(avgmed = mean(medcost_r))
+
+```
+
+It is obvious from the first graph below that there is a clear relationship between income and the ability to afford a doctor when needed. Those with lower income, especially under $25K, are more likely to report not being able to see a doctor due to cost.
+
+```{r}
+ggplot(brfss2013, aes(x=factor(income2_r2), y=medcost_r)) + stat_summary(fun.y="mean", geom="bar")
+
+```
+
+What should be noted in the second graph, however, is that even a small amount of extra household income at the lowest income brackets make a significant difference. Each additional $5K in household income translated into a decrease of 2-3 percentage points from LT 10K to LT $25K.
+
+```{r}
+
+ggplot(brfss2013, aes(x=factor(income2_r), y=medcost_r)) + stat_summary(fun.y="mean", geom="bar")
+
+```
+
+As stated originally in the research question section, this data is observational and cannot directly say household income causes respondents to not be able to afford a visit to the doctor. However, the relationship appears to be quite strong, and warrants further research.
+
+
+**Research question 3:**
+
+Among drinkers of alcohol in the past 30 days, does the occurrence of binge drinking differ by age and sex?
+
+For the purposes of this analysis, binge drinking is defined as having "5 or more drinks for men or 4 or more drinks for women on an occasion" at least once in the past 30 days (BRFSS 2013 codebook). Respondents were asked the number of occasions. This was recoded below to a dichotomous variable with any occasion (1+) considered binge drinking.
+
+Further recoding was done below on the age variable to format the graphs properly. While this is not part of the analysis per se, it is noted for clarity.
+
+```{r}
+
+load("brfss2013.RData")
+
+#recoding number of occasions to dichotomous
+brfss2013 <- brfss2013 %>%
+  mutate(binge = 
+           ifelse(drnk3ge5==0, 0, 
+           ifelse(drnk3ge5>=1, 1,-9)))
+
+#recoding number of occasions to dichotomous - and filtering by male for graph
+brfss2013_m <- brfss2013 %>%
+  filter(sex=='Male',!is.na(X_ageg5yr) ) %>%
+  mutate(binge = 
+           ifelse(drnk3ge5==0, 0, 
+           ifelse(drnk3ge5>=1, 1,-9)))
+
+#shortening age break codes to fit on graph
+brfss2013_m <- brfss2013_m %>%
+  mutate(age5yr = 
+           ifelse(X_ageg5yr=='Age 18 to 24', '18-24',
+           ifelse(X_ageg5yr=='Age 25 to 29', '25-29',
+           ifelse(X_ageg5yr=='Age 30 to 34', '30-34',
+           ifelse(X_ageg5yr=='Age 35 to 39', '35-39',
+           ifelse(X_ageg5yr=='Age 40 to 44', '40-44',
+           ifelse(X_ageg5yr=='Age 45 to 49', '45-49',
+           ifelse(X_ageg5yr=='Age 50 to 54', '50-54',
+           ifelse(X_ageg5yr=='Age 55 to 59', '55-59',
+           ifelse(X_ageg5yr=='Age 60 to 64', '60-64',
+           ifelse(X_ageg5yr=='Age 65 to 69', '65-69',
+           ifelse(X_ageg5yr=='Age 70 to 74', '70-74',
+           ifelse(X_ageg5yr=='Age 75 to 79', '75-79',
+           ifelse(X_ageg5yr=='Age 80 or older', '80+','0'                  ))))))))))))))
+
+#recoding number of occasions to dichotomous - and filtering by female for graph
+brfss2013_f <- brfss2013 %>%
+  filter(sex=='Female',!is.na(X_ageg5yr) ) %>%
+  mutate(binge = 
+           ifelse(drnk3ge5==0, 0, 
+           ifelse(drnk3ge5>=1, 1,-9)))
+
+#shortening age break codes to fit on graph
+brfss2013_f <- brfss2013_f %>%
+  mutate(age5yr = 
+           ifelse(X_ageg5yr=='Age 18 to 24', '18-24',
+           ifelse(X_ageg5yr=='Age 25 to 29', '25-29',
+           ifelse(X_ageg5yr=='Age 30 to 34', '30-34',
+           ifelse(X_ageg5yr=='Age 35 to 39', '35-39',
+           ifelse(X_ageg5yr=='Age 40 to 44', '40-44',
+           ifelse(X_ageg5yr=='Age 45 to 49', '45-49',
+           ifelse(X_ageg5yr=='Age 50 to 54', '50-54',
+           ifelse(X_ageg5yr=='Age 55 to 59', '55-59',
+           ifelse(X_ageg5yr=='Age 60 to 64', '60-64',
+           ifelse(X_ageg5yr=='Age 65 to 69', '65-69',
+           ifelse(X_ageg5yr=='Age 70 to 74', '70-74',
+           ifelse(X_ageg5yr=='Age 75 to 79', '75-79',
+           ifelse(X_ageg5yr=='Age 80 or older', '80+','0'                  ))))))))))))))
+
+```
+
+
+Among males who have drank at least one alcoholic beverage in the past 30 days, binge drinking is extremely high among younger drinker. 59.2% of drinkers 18-24 had at least one occasion of binge drinking in the past month. This number does steadily decline for older male drinkers. However, it should be noted that almost one third (32.8%) of male drinkers ages 50-54 report 1+ binge drinking occasions in the past month. The percentage does decline, but not rapidly.
+
+```{r}
+brfss2013 %>% 
+  filter(!is.na(binge), sex=='Male') %>%
+  group_by(X_ageg5yr) %>% 
+  summarise(avgbinge = mean(binge))
+
+```
+
+Like male drinkers, the percentage of female drinkers reporting at least one binge-drinking occasion starts out high (44.5%) and declines over time. The percentage of females reporting a binge-drinking occasion is lower than males for every corresponding age category.
+
+```{r}
+brfss2013 %>% 
+  filter(!is.na(binge), sex=='Female') %>%
+  group_by(X_ageg5yr) %>% 
+  summarise(avgbinge = mean(binge))
+```
+
+Looking at the graphs below, the percentage of males reporting a binge-drinking occasion do appear to decline quite steadily. The percentage of women seems to decline more sharply than expected between ages 30-34, and perhaps even at ages 25-29.
+
+*Please note that the scales for the following graphs are not identical on the y-axis.
+
+```{r}
+
+ggplot(brfss2013_m, aes(x=factor(age5yr), y=binge)) + stat_summary(fun.y="mean", geom="bar")
+
+ggplot(brfss2013_f, aes(x=factor(age5yr), y=binge)) + stat_summary(fun.y="mean", geom="bar")
+  
+
+```
+
+Based on the above results, there seems to be a relationship between the occurrence of binge-drinking and both age and sex.
+
